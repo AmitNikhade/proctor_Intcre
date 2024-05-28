@@ -8,6 +8,13 @@ from pymongo import MongoClient
 from datetime import datetime
 import tensorflow as tf
 
+
+fl = (615.7648315185546, 615.6675785709508)
+pp = (320.3119237464785, 242.33699852535715)
+dc = np.array([[-0.0013841792342825923, 0.0005103200531089663, -0.007144587675239075, 0.0026517804999418816, -0.0035477400857502327]]) 
+
+
+
 # Connect to the MongoDB server
 client = MongoClient("mongodb://localhost:27017/")
 db = client['proctor']
@@ -23,7 +30,7 @@ def db_append(sensor_data):
 
 # Known width and distance parameters
 KNOWN_WIDTH = 11.0
-KNOWN_DISTANCE = 100.0
+KNOWN_DISTANCE = 10.0
 FRAMES_FOR_MOVING_AVERAGE = 800
 
 # Function to calculate focal length
@@ -73,7 +80,7 @@ def detect_multiple_faces(fr):
     # Check the number of faces detected
     num_faces = len(faces)
     if num_faces > 1:
-        cv2.putText(zoomed_frame, "Alert: More than one face detected!", (50, 500), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        cv2.putText(zoomed_frame, "Alert: More than one face detected!", (100, 850), cv2.FONT_HERSHEY_SIMPLEX, 1, (128, 0, 128), 2)
         print(f"Alert: More than one face detected! ({num_faces} faces)")
 
 class MovingAverageFilter:
@@ -159,6 +166,39 @@ focal_length = calculate_focal_length(pixel_width)
 # Initialize deque for storing recent distances
 recent_distances = deque(maxlen=FRAMES_FOR_MOVING_AVERAGE)
 
+
+def estimate_distance(landmarks):
+    # Calculate the distance between the eye corners
+    left_eye_corner = landmarks.part(36).x, landmarks.part(36).y
+    right_eye_corner = landmarks.part(39).x, landmarks.part(39).y
+    eye_distance = np.linalg.norm(np.array(left_eye_corner) - np.array(right_eye_corner))
+
+    # Assuming the average eye distance is 6.3 cm at 1 meter
+    avg_eye_distance = 6.3
+    distance = avg_eye_distance / eye_distance
+
+    return distance
+
+def calculate_actual_distance(rgb_frame, frame):
+     # Detect faces in the frame
+    faces = face_cascade.detectMultiScale(rgb_frame, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+
+    # Process each detected face
+    for (x, y, w, h) in faces:
+        # Draw a rectangle around the face
+        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+        # Detect facial landmarks
+        face_rect = dlib.rectangle(int(x), int(y), int(x + w), int(y + h))
+        landmarks = predictor(rgb_frame, face_rect)
+
+        # Estimate the distance between the face and the camera
+        distance = estimate_distance(landmarks)
+        print(f"Distance: {distance:.2f} meters")
+        cv2.putText(frame, f"Actual Distance: {distance:.2f} meters", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 165, 255), 2)
+        if distance > 0.13:
+            cv2.putText(frame, f"please stay close to the screen and maintain stability", (50, 600), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            db_append("please stay close to the screen and maintain stability")
 while cap.isOpened():
     ret, frame = cap.read()
     if not ret:
@@ -173,7 +213,7 @@ while cap.isOpened():
     zoomed_frame = frame[start_y:end_y, start_x:end_x]
     rgb_frame = cv2.cvtColor(zoomed_frame, cv2.COLOR_BGR2RGB)
     detect_multiple_faces(rgb_frame)
-
+    calculate_actual_distance(rgb_frame,frame)
     # Detect the object and get its pixel width
     pixel_width = detect_object(frame)
 
@@ -183,11 +223,11 @@ while cap.isOpened():
         recent_distances.append(distance)
         avg_distance = sum(recent_distances) / len(recent_distances)
         zoomed_frame = zoom(frame, zoom_factor)
-        if distance > 150 and avg_distance > 250:
-            cv2.putText(zoomed_frame, "please stay close to the screen and maintain stability", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            db_append("please stay close to the screen and maintain stability")
-        cv2.putText(zoomed_frame, f"Avg Distance: {avg_distance:.2f} inches", (50, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-        cv2.putText(zoomed_frame, f"Distance: {distance:.2f} inches", (50, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        # if distance > 10 and avg_distance > 13:
+            # cv2.putText(zoomed_frame, "please stay close to the screen and maintain stability", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 165, 255), 2)
+            # db_append("please stay close to the screen and maintain stability")
+        cv2.putText(zoomed_frame, f"Avg Distance: {avg_distance:.2f} inches", (50, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 100), 2)
+        cv2.putText(zoomed_frame, f"Distance: {distance:.2f} inches", (50, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, (100, 255, 0), 2)
 
     results = face_mesh.process(rgb_frame)
     if results.multi_face_landmarks:
@@ -220,10 +260,10 @@ while cap.isOpened():
                 mouth_counter = 0
 
             if mouth_open:
-                cv2.putText(zoomed_frame, "Mouth closed", (50, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                cv2.putText(zoomed_frame, "Mouth closed", (50, 400), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 255), 2)
                 db_append("Mouth closed")
             else:
-                cv2.putText(zoomed_frame, "Mouth open", (50, 150), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                cv2.putText(zoomed_frame, "Mouth open", (50, 450), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 200), 2)
                 db_append("Mouth open")
 
             left_iris_landmarks = [468, 469, 470, 471]
@@ -257,31 +297,31 @@ while cap.isOpened():
                 delta_right_y = curr_right_y - prev_right_y
 
                 if delta_left_x > 3:
-                    cv2.putText(zoomed_frame, "Left iris moved right", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                    cv2.putText(zoomed_frame, "Left iris moved right", (800, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 1)
                     db_append("Left iris moved right")
                 elif delta_left_x < -3:
-                    cv2.putText(zoomed_frame, "Left iris moved left", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                    cv2.putText(zoomed_frame, "Left iris moved left", (800, 80), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 1)
                     db_append("Left iris moved left")
 
                 if delta_left_y > 3:
-                    cv2.putText(zoomed_frame, "Left iris moved down", (50, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                    cv2.putText(zoomed_frame, "Left iris moved down", (800, 110), cv2.FONT_HERSHEY_SIMPLEX, 1, (128, 0, 128), 1)
                     db_append("Left iris moved down")
                 elif delta_left_y < -3:
-                    cv2.putText(zoomed_frame, "Left iris moved up", (50, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                    cv2.putText(zoomed_frame, "Left iris moved up", (800, 140), cv2.FONT_HERSHEY_SIMPLEX, 1, (128, 0, 128), 1)
                     db_append("Left iris moved up")
 
                 if delta_right_x > 3:
-                    cv2.putText(zoomed_frame, "Right iris moved right", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                    cv2.putText(zoomed_frame, "Right iris moved right", (800, 170), cv2.FONT_HERSHEY_SIMPLEX, 1, (128, 0, 0), 1)
                     db_append("Right iris moved right")
                 elif delta_right_x < -3:
-                    cv2.putText(zoomed_frame, "Right iris moved left", (50, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                    cv2.putText(zoomed_frame, "Right iris moved left", (800, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (128, 0, 0), 1)
                     db_append("Right iris moved left")
 
                 if delta_right_y > 3:
-                    cv2.putText(zoomed_frame, "Right iris moved down", (50, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                    cv2.putText(zoomed_frame, "Right iris moved down", (800, 230), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 1)
                     db_append("Right iris moved down")
                 elif delta_right_y < -3:
-                    cv2.putText(zoomed_frame, "Right iris moved up", (50, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                    cv2.putText(zoomed_frame, "Right iris moved up", (800, 260), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 1)
                     db_append("Right iris moved up")
 
             prev_left_x = curr_left_x
@@ -302,7 +342,7 @@ while cap.isOpened():
             preds = model.predict(resized_iris_frame)[0]
             j = np.argmax(preds)
             label = "Real" if j == 0 else "Fake"
-            color = (0, 255, 0) if label == "Real" else (0, 0, 255)
+            color = (0, 165, 255) if label == "Real" else (0, 0, 255)
             cv2.putText(zoomed_frame, f"Liveness: {label}", (50, 250), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
             db_append(f"Liveness: {label}")
 
@@ -342,7 +382,7 @@ while cap.isOpened():
         elif pitch < -9000 and pitch > -9700:
             direction = "Down"
 
-        cv2.putText(zoomed_frame, direction, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        cv2.putText(zoomed_frame, "Face_direction:"+ direction, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (19, 69, 139), 2)
 
                 # Display the resulting frame
     cv2.imshow('Integrated Detection', zoomed_frame)
