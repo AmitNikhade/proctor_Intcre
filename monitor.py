@@ -8,6 +8,7 @@ from pymongo import MongoClient
 from datetime import datetime
 import tensorflow as tf
 
+print('Starting')
 
 fl = (615.7648315185546, 615.6675785709508)
 pp = (320.3119237464785, 242.33699852535715)
@@ -20,6 +21,7 @@ client = MongoClient("mongodb://localhost:27017/")
 db = client['proctor']
 mycollection = db['data1']
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+print("Connecting to MongoDB")
 
 def db_append(sensor_data):
     document = {
@@ -65,14 +67,17 @@ def detect_object(image):
     else:
         return None
 
-def detect_multiple_faces(fr):
+def detect_multiple_faces(fr, zoomed_frame):
+    print("t")
+    print(fr)
+    gray = cv2.cvtColor(fr, cv2.COLOR_BGR2GRAY)
     faces = face_cascade.detectMultiScale(
-        fr,
+        gray,
         scaleFactor=1.1,
         minNeighbors=5,
         minSize=(30, 30)
     )
-
+    print("t2")
     # Draw rectangles around the detected faces
     for (x, y, w, h) in faces:
         cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
@@ -94,19 +99,21 @@ class MovingAverageFilter:
             self.data.pop(0)
         return sum(self.data) / len(self.data)
 
-# Load liveness detector model
-model = tf.keras.models.load_model("best_model_16_11pm.h5")
 
+print("loading model...")
+# Load liveness detector model
+model = tf.keras.models.load_model(r"C:\Users\amiti\OneDrive\Documents\client_app\AI\best_model_16_11pm.h5")
+print("model loaded")
 # Initialize MediaPipe Face Mesh
 mp_face_mesh = mp.solutions.face_mesh
 face_mesh = mp_face_mesh.FaceMesh(max_num_faces=1, refine_landmarks=True)
 mp_drawing = mp.solutions.drawing_utils
 drawing_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1, color=(0, 0, 0))
-
+# print("python")
 # Load the pre-trained face detector and landmark predictor
 detector = dlib.get_frontal_face_detector()
-predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
-
+predictor = dlib.shape_predictor(r"C:\Users\amiti\OneDrive\Documents\client_app\AI\shape_predictor_68_face_landmarks.dat")
+print("1")
 # Function to calculate the head pose
 def get_head_pose(shape):
     image_pts = np.float32([shape[30], shape[8], shape[36], shape[45], shape[48], shape[54]])
@@ -139,6 +146,7 @@ def get_head_pose(shape):
 
     return p1, p2, rotation_vector
 
+print("2")
 # Capture video from webcam
 cap = cv2.VideoCapture(0)
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
@@ -165,7 +173,7 @@ focal_length = calculate_focal_length(pixel_width)
 
 # Initialize deque for storing recent distances
 recent_distances = deque(maxlen=FRAMES_FOR_MOVING_AVERAGE)
-
+print("3")
 
 def estimate_distance(landmarks):
     # Calculate the distance between the eye corners
@@ -199,11 +207,14 @@ def calculate_actual_distance(rgb_frame, frame):
         if distance > 0.13:
             cv2.putText(frame, f"please stay close to the screen and maintain stability", (50, 600), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
             db_append("please stay close to the screen and maintain stability")
+            
+            
+print("4")
 while cap.isOpened():
     ret, frame = cap.read()
     if not ret:
         break
-
+    
     height, width, _ = frame.shape
     zoom_factor = 1
     start_x = max(0, int(width / 2 - (width / zoom_factor / 2)))
@@ -212,11 +223,13 @@ while cap.isOpened():
     end_y = min(height, int(height / 2 + (height / zoom_factor / 2)))
     zoomed_frame = frame[start_y:end_y, start_x:end_x]
     rgb_frame = cv2.cvtColor(zoomed_frame, cv2.COLOR_BGR2RGB)
-    detect_multiple_faces(rgb_frame)
+    
+    detect_multiple_faces(rgb_frame, zoomed_frame)
+    
     calculate_actual_distance(rgb_frame,frame)
-    # Detect the object and get its pixel width
+    # # Detect the object and get its pixel width
     pixel_width = detect_object(frame)
-
+    
     if pixel_width is not None:
         distance = calculate_distance(focal_length, pixel_width)
         zoom_factor = 1.0 + distance * 0.001
@@ -346,13 +359,16 @@ while cap.isOpened():
             cv2.putText(zoomed_frame, f"Liveness: {label}", (50, 250), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
             db_append(f"Liveness: {label}")
 
+
+
+    print("5")
     # Detect faces
     faces = detector(rgb_frame)
-
+    
     for face in faces:
         # Detect landmarks
         shape = predictor(rgb_frame, face)
-
+        
         # Convert shape to numpy array
         shape = np.array([(shape.part(i).x, shape.part(i).y) for i in range(68)])
 
@@ -363,14 +379,16 @@ while cap.isOpened():
         # Estimate head pose and draw line
         p1, p2, rotation_vector = get_head_pose(shape)
         cv2.line(zoomed_frame, p1, p2, (0, 255, 0), 2)
-
+        
         # Calculate the angle of rotation around the y-axis and x-axis
         rotation_matrix = cv2.Rodrigues(rotation_vector)[0]
         _, _, _, _, _, _, angles = cv2.decomposeProjectionMatrix(cv2.hconcat((rotation_matrix, np.zeros((3, 1)))))
+        
         yaw = math.degrees(angles[1])  # Rotation around the y-axis
         pitch = math.degrees(angles[0])  # Rotation around the x-axis
+        print("6")
         print(pitch)
-
+        
         # Display direction
         direction = ""
         if yaw > 1000 and yaw < 3000:
@@ -381,15 +399,17 @@ while cap.isOpened():
             direction = "up"
         elif pitch < -9000 and pitch > -9700:
             direction = "Down"
-
+        
+        print(direction)
         cv2.putText(zoomed_frame, "Face_direction:"+ direction, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (19, 69, 139), 2)
-
+        print("6")
+    # print(zoomed_frame)
                 # Display the resulting frame
     cv2.imshow('Integrated Detection', zoomed_frame)
-
+#     print("8")
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
-# Release the capture
+# # Release the capture
 cap.release()
 cv2.destroyAllWindows()
