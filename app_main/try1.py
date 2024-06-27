@@ -19,7 +19,7 @@ from keras.preprocessing.image import img_to_array
 
 # Load pre-trained parameters for the cascade classifier and the emotion detection model
 face_classifier = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-classifier = load_model('model.h5')  # Replace 'model.h5' with the path to your model file
+classifier = load_model('app_main\model.h5')  # Replace 'model.h5' with the path to your model file
 emotion_labels = ['Angry', 'Disgust', 'Fear', 'Happy', 'Neutral', 'Sad', 'Surprise']  # Emotion labels
 
 def detect_emotion(frame):
