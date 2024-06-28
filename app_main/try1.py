@@ -138,7 +138,7 @@ class MovingAverageFilter:
 print("5")
 # print("loading model...")
 # # Load liveness detector model
-model = tf.keras.models.load_model(r"C:\Users\amiti\OneDrive\Documents\client_app\AI\best_model_16_11pm.h5")
+model = tf.keras.models.load_model(r"app_main\best_model_16_11pm.h5")
 print("model loaded")
 # # Initialize MediaPipe Face Mesh
 mp_face_mesh = mp.solutions.face_mesh
@@ -152,7 +152,7 @@ print("9")
 # # print("python")
 # # Load the pre-trained face detector and landmark predictor
 detector = dlib.get_frontal_face_detector()
-predictor = dlib.shape_predictor(r"C:\Users\amiti\OneDrive\Documents\client_app\AI\shape_predictor_68_face_landmarks.dat")
+predictor = dlib.shape_predictor(r"app_main\shape_predictor_68_face_landmarks.dat")
 print("10")
 # # Function to calculate the head pose
 def get_head_pose(shape):
@@ -191,11 +191,11 @@ def get_head_pose(shape):
 # cap = cv2.VideoCapture(0)
 # cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
 # cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-
+# print("11")
 # Initialize moving average filters
 left_filter = MovingAverageFilter(window_size=3)
 right_filter = MovingAverageFilter(window_size=3)
-
+# print("12")
 # Previous x-coordinate of left and right iris
 prev_left_x = None
 prev_left_y = None
@@ -217,7 +217,7 @@ mouth_counter = 0
 
 # # Initialize deque for storing recent distances
 recent_distances = deque(maxlen=FRAMES_FOR_MOVING_AVERAGE)
-# print("3")
+# print("13")
 
 def estimate_distance(landmarks):
     # Calculate the distance between the eye corners
