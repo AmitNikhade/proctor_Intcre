@@ -310,6 +310,7 @@ def process_frame(incoming_frame):
     print("1.4")
     calculate_actual_distance(rgb_frame,frame)
     print("1.5")
+    
     # # Detect the object and get its pixel width
     pixel_width = detect_object(frame)
     print("1.6")
@@ -326,6 +327,8 @@ def process_frame(incoming_frame):
         cv2.putText(zoomed_frame, f"Avg Distance: {avg_distance:.2f} inches", (50, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 100), 2)
         cv2.putText(zoomed_frame, f"Distance: {distance:.2f} inches", (50, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, (100, 255, 0), 2)
     
+    
+
     results = face_mesh.process(rgb_frame)
     
     if results.multi_face_landmarks:
