@@ -73,6 +73,10 @@ FRAMES_FOR_MOVING_AVERAGE = 800
 
 # # Function to calculate focal length
 def calculate_focal_length(pixel_width):
+    print(pixel_width )
+    print(KNOWN_DISTANCE)
+    print(KNOWN_WIDTH)
+    print("Calculating focal length....", (pixel_width * KNOWN_DISTANCE) / KNOWN_WIDTH)
     return (pixel_width * KNOWN_DISTANCE) / KNOWN_WIDTH
 
 # # Function to calculate distance of the object from the camera
@@ -91,17 +95,23 @@ def zoom(image, zoom_factor):
 
 # # Function to detect the object in the image
 def detect_object(image):
+    
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     lower_red = np.array([0, 120, 70])
     upper_red = np.array([10, 255, 255])
     mask = cv2.inRange(hsv, lower_red, upper_red)
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    print("????????????????",hsv, lower_red, upper_red,mask, contours)
     if contours:
+        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
         largest_contour = max(contours, key=cv2.contourArea)
         x, y, w, h = cv2.boundingRect(largest_contour)
         return w
     else:
+        print("PPPPPPPPP")
         return None
+    
 print("4")
 def detect_multiple_faces(fr, zoomed_frame):
     print("t")
@@ -263,6 +273,8 @@ def calculate_actual_distance(rgb_frame, frame):
 # ry=[]
 
 def process_frame(incoming_frame):
+    print("Processing frame")
+    
     # if len(lx) is 2:
     #     lx.pop(0)
     # if len(ly) is 2:
@@ -273,9 +285,16 @@ def process_frame(incoming_frame):
     #     ry.pop(0)
     global prev_left_x, prev_left_y, prev_right_x, prev_right_y
     pixel_width = detect_object(incoming_frame)
-
+    print("1.1")
+    print("pixel_width", pixel_width)
+    import time
+    # time.sleep(10)
+    
 # Calculate the focal length
     focal_length = calculate_focal_length(pixel_width)
+    # return incoming_frame
+    
+    print("1.2")
     frame = incoming_frame
     height, width, _ = frame.shape
     zoom_factor = 1
@@ -285,13 +304,15 @@ def process_frame(incoming_frame):
     end_y = min(height, int(height / 2 + (height / zoom_factor / 2)))
     zoomed_frame = frame[start_y:end_y, start_x:end_x]
     rgb_frame = cv2.cvtColor(zoomed_frame, cv2.COLOR_BGR2RGB)
+    print("1.3")
     
     detect_multiple_faces(rgb_frame, zoomed_frame)
-    
+    print("1.4")
     calculate_actual_distance(rgb_frame,frame)
-    
+    print("1.5")
     # # Detect the object and get its pixel width
     pixel_width = detect_object(frame)
+    print("1.6")
     
     if pixel_width is not None:
         distance = calculate_distance(focal_length, pixel_width)
@@ -403,7 +424,7 @@ def process_frame(incoming_frame):
                 delta_left_y = curr_left_y - prev_left_y
                 delta_right_x = curr_right_x - prev_right_x
                 delta_right_y = curr_right_y - prev_right_y
-                print("???????????????????????",delta_left_x, delta_right_x, delta_right_y, delta_left_y)
+                # print(,delta_left_x, delta_right_x, delta_right_y, delta_left_y)
                 if delta_left_x > 3:
                     cv2.putText(zoomed_frame, "Left iris moved right", (800, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 1)
                     print("Right iris moved")
@@ -503,8 +524,9 @@ def process_frame(incoming_frame):
         
         print(direction)
         cv2.putText(zoomed_frame, "Face_direction:"+ direction, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (19, 69, 139), 2)
-    #     print("6")
+        print("6.5")
         zoomed_frame= detect_emotion(zoomed_frame)
+    print("Zoomed frame: ", zoomed_frame)
     return zoomed_frame
     # return zoomed_frame, prev_right_y, prev_left_y, prev_right_x, prev_left_x
     # print(zoomed_frame)
