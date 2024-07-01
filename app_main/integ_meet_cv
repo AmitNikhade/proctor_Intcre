@@ -476,7 +476,7 @@ class CameraManager:
             ret, frame = self.cap.read()
         if ret:
             # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame = try1.process_frame(frame)
+            try1.process_frame(frame)
             # time.sleep(5)
             return frame
         return None
