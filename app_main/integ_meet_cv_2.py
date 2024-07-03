@@ -82,10 +82,11 @@ class WebRTCClient(QObject):
     incoming_frame = pyqtSignal(np.ndarray)
     outgoing_frame = pyqtSignal(np.ndarray)
 
-    def __init__(self):
+    def __init__(self, text_editor):
         super().__init__()
         self.pc = None
         self.video_track = None
+        self.text_editor_track = TextEditorStreamTrack(text_editor)
 
     async def run_offer(self, pc):
         await pc.setLocalDescription(await pc.createOffer())
@@ -108,6 +109,7 @@ class WebRTCClient(QObject):
         self.pc = RTCPeerConnection()
         self.video_track = VideoTransformTrack()
         self.pc.addTrack(self.video_track)
+        self.pc.addTrack(self.text_editor_track)
 
         @self.pc.on("track")
         def on_track(track):
@@ -152,6 +154,8 @@ class WebRTCClient(QObject):
             logger.info("Cleaning up...")
             await recorder.stop()
             await self.pc.close()
+
+
 
 class WebRTCWorker(QRunnable):
     def __init__(self, webrtc_client, running_event):
@@ -265,7 +269,7 @@ class FullScreenWindow(QMainWindow):
         self.timer.timeout.connect(self.update_outgoing_frame)
         self.timer.start(30)  # Update the frame every 30 ms
 
-        self.webrtc_client = WebRTCClient()
+        self.webrtc_client = WebRTCClient(self.code_editor)
         self.webrtc_client.incoming_frame.connect(self.update_incoming_frame)
         
         self.thread_pool = QThreadPool()
@@ -274,9 +278,7 @@ class FullScreenWindow(QMainWindow):
 
         self.vad_worker = VADWorker(self.running_event)
         self.thread_pool.start(self.vad_worker)
-    
 
-        
     def setup_editor(self):
         self.code_editor.setUtf8(True)
         self.code_editor.setFont(QFont("Consolas", 12))
@@ -307,7 +309,6 @@ class FullScreenWindow(QMainWindow):
         
         self.code_editor.setLexer(lexer)
 
-    
     def run_code(self):
         code = self.code_editor.text()
         
@@ -398,7 +399,42 @@ def start_app():
         logger.error(f"An error occurred in the Qt application: {e}")
         traceback.print_exc()
 
-        
+
+class TextEditorStreamTrack(VideoStreamTrack):
+    def __init__(self, text_editor):
+        super().__init__()
+        self.text_editor = text_editor
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.capture_text_editor)
+        self.timer.start(1000 // 30)  # Capture at 30 FPS
+        self.latest_frame = None
+        self.lock = threading.Lock()
+
+    def capture_text_editor(self):
+        with self.lock:
+            editor_content = self.text_editor.grab().toImage()
+            editor_content = editor_content.convertToFormat(QImage.Format_RGB888)
+            width = editor_content.width()
+            height = editor_content.height()
+            self.latest_frame = np.array(editor_content.bits()).reshape((height, width, 3))
+
+    async def recv(self):
+        pts, time_base = await self.next_timestamp()
+
+        with self.lock:
+            frame = self.latest_frame
+
+        if frame is None:
+            raise RuntimeError("No text editor frame available")
+
+        video_frame = VideoFrame.from_ndarray(frame, format="rgb24")
+        video_frame.pts = pts
+        video_frame.time_base = time_base
+        return video_frame
+
+
+
+
 def main_vad(running_event):
     parser = argparse.ArgumentParser()
     parser.add_argument("--energy_threshold", default=1000, help="Energy level for mic to detect.", type=int)
