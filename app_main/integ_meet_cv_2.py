@@ -26,8 +26,8 @@ class AudioClient:
         self.stream_out = None
 
         # Set up socket events
-        self.sio.on('connect', self.on_connect)
-        self.sio.on('disconnect', self.on_disconnect)
+        self.sio.on('connect_a', self.on_connect)
+        self.sio.on('disconnect_a', self.on_disconnect)
         self.sio.on('audio', self.on_audio)
 
     def on_connect(self):

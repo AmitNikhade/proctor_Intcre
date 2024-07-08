@@ -40,8 +40,8 @@ class AudioClient:
         self.stream_out = None
 
         # Set up socket events
-        self.sio.on('connect', self.on_connect)
-        self.sio.on('disconnect', self.on_disconnect)
+        self.sio.on('connect_a', self.on_connect)
+        self.sio.on('disconnect_a', self.on_disconnect)
         self.sio.on('audio', self.on_audio)
 
     def on_connect(self):
@@ -693,10 +693,15 @@ if __name__ == "__main__":
         thread3 = threading.Thread(target=e_d_func.disable, name='Thread 3')
         
         thread1.start()
+        print("thread1 started")
         thread2.start()
+        print("thread2 started")
         thread3.start()
+        print("thread3 started")
         thread4.start()
+        print("thread4 started")
         thread5.start()
+        print("thread5 started")
         
         thread1.join()
         thread2.join()
