@@ -6,9 +6,121 @@ import base64
 import time
 import io
 from PIL import Image
+import pyaudio
 
 sio = socketio.Client(logger=True, engineio_logger=True)
+sio1 = socketio.Client(logger=True, engineio_logger=True)
 
+
+
+class AudioClient:
+    def __init__(self, server_url='https://dash.intellirecruit.ai'):
+        self.sio1 = socketio.Client(logger=True, engineio_logger=True)
+        self.server_url = server_url
+        self.running = False
+        self.reconnecting = False
+
+        # Audio settings
+        self.FORMAT = pyaudio.paInt16
+        self.CHANNELS = 1
+        self.RATE = 44100
+        self.CHUNK = 8192
+
+        self.audio = pyaudio.PyAudio()
+        self.stream_in = None
+        self.stream_out = None
+
+        # Set up socket events
+        self.sio1.on('connect_a', self.on_connect)
+        self.sio1.on('disconnect_a', self.on_disconnect)
+        self.sio1.on('audio', self.on_audio)
+
+    def on_connect(self):
+        logger.info("Connected to server")
+        self.reconnecting = False
+
+    def on_disconnect(self):
+        logger.info("Disconnected from server")
+        if self.running and not self.reconnecting:
+            self.reconnecting = True
+            self.reconnect()
+
+    def on_audio(self, data):
+        try:
+            audio_data = np.frombuffer(data, dtype=np.int16)
+            logger.debug(f"Received audio data of length: {len(audio_data)}")
+            if self.stream_out:
+                self.stream_out.write(audio_data.tobytes())
+        except Exception as e:
+            logger.error(f"Error processing received audio: {e}")
+
+    def send_audio(self):
+        while self.running:
+            try:
+                if not self.stream_in or self.stream_in.is_stopped():
+                    self.stream_in = self.audio.open(format=self.FORMAT, channels=self.CHANNELS,
+                                                    rate=self.RATE, input=True,
+                                                    frames_per_buffer=self.CHUNK)
+                data = self.stream_in.read(self.CHUNK, exception_on_overflow=False)
+                logger.debug(f"Sending audio data of length: {len(data)}")
+                self.sio1.emit('audio', data)
+            except Exception as e:
+                logger.error(f"Error capturing or sending audio: {e}")
+                time.sleep(0.1)
+
+    def reconnect(self):
+        logger.info("Attempting to reconnect...")
+        while self.running and not self.sio1.connected:
+            try:
+                self.sio1.connect(self.server_url)
+                logger.info("Reconnected successfully")
+                break
+            except Exception as e:
+                logger.error(f"Reconnection failed: {e}")
+                time.sleep(5)  # Wait for 5 seconds before trying again
+
+    def run(self):
+        self.running = True
+        try:
+            self.stream_in = self.audio.open(format=self.FORMAT, channels=self.CHANNELS,
+                                             rate=self.RATE, input=True,
+                                             frames_per_buffer=self.CHUNK)
+            
+            self.stream_out = self.audio.open(format=self.FORMAT, channels=self.CHANNELS,
+                                              rate=self.RATE, output=True,
+                                              frames_per_buffer=self.CHUNK)
+
+            self.sio1.connect(self.server_url)
+            
+            # Start sending audio in a separate thread
+            threading.Thread(target=self.send_audio, daemon=True).start()
+            
+            while self.running:
+                time.sleep(1)
+
+        except Exception as e:
+            logger.error(f"Error in main loop: {e}")
+        finally:
+            self.running = False
+            if self.stream_in:
+                self.stream_in.stop_stream()
+                self.stream_in.close()
+            if self.stream_out:
+                self.stream_out.stop_stream()
+                self.stream_out.close()
+            self.audio.terminate()
+            if self.sio1.connected:
+                self.sio1.disconnect()
+
+# if __name__ == '__main__':
+    
+    # except KeyboardInterrupt:
+    #     logger.info("Interrupted by user, shutting down...")
+    # finally:
+    #     client.running = False
+
+
+#############################################################
 @sio.event(namespace='/screen')
 def connect():
     print('Connection established to /screen namespace')
@@ -22,6 +134,7 @@ def disconnect():
     print('Disconnected from /screen namespace')
 
 def capture_and_send_screen():
+    sio.connect('https://dashboard.intellirecruit.ai', namespaces=['/screen'])
     while True:
         if sio.connected:
             try:
@@ -564,16 +677,26 @@ def main_vad(running_event):
 if __name__ == "__main__":
     try:
         elevate.elevate()
-        sio.connect('https://dashboard.intellirecruit.ai', namespaces=['/screen'])
+        
+        client = AudioClient()
+    # try:
+       
+        thread5 = threading.Thread(target=client.run, name='Thread 5')
         thread4 = threading.Thread(target=capture_and_send_screen, name='Thread 4')
         
         thread1 = threading.Thread(target=start_app, name='Thread 1')
         thread2 = threading.Thread(target=main_vad, name='Thread 2')
         thread3 = threading.Thread(target=e_d_func.disable, name='Thread 3')
+        
+        thread5.start()
         thread1.start()
+        print("Thread 1 started")
         thread2.start()
         thread3.start()
         thread4.start()
+        print("Thread 4 started")
+        
+        # thread5.join()
         thread1.join()
         thread2.join()
         thread3.join()
