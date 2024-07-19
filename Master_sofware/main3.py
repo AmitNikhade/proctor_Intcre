@@ -192,13 +192,15 @@ import traceback
 import time
 import e_d_func
 import try1
-
+from threading import Lock
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 SERVER_URL = "wss://dashboard.intellirecruit.ai/websocket"
 CLIENT_ID = "client1"
+
+frame_lock = Lock()
 
 def custom_excepthook(exctype, value, tb):
     error_msg = ''.join(traceback.format_exception(exctype, value, tb))
@@ -231,21 +233,31 @@ camera_manager = CameraManager()
 class VideoTransformTrack(VideoStreamTrack):
     def __init__(self):
         super().__init__()
+        self.cap = cv2.VideoCapture(0)
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        if not self.cap.isOpened():
+            print("Could not start video capture")
+            raise RuntimeError("Could not start video capture")
 
     async def recv(self):
+        global outgoing_frame
         pts, time_base = await self.next_timestamp()
 
-        frame = camera_manager.read_frame()
-        if frame is None:
-            logger.error("Failed to capture frame")
+        ret, frame = self.cap.read()
+        if not ret:
+            print("Failed to capture frame")
             raise RuntimeError("Failed to capture frame")
 
-        video_frame = VideoFrame.from_ndarray(frame, format="rgb24")
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        video_frame = VideoFrame.from_ndarray(frame_rgb, format="rgb24")
         video_frame.pts = pts
         video_frame.time_base = time_base
 
-        logger.debug("Captured and processed frame")
+        with frame_lock:
+            outgoing_frame = frame_rgb
         return video_frame
+
 
 class WebRTCClient(QObject):
     incoming_frame = pyqtSignal(np.ndarray)
@@ -260,67 +272,108 @@ class WebRTCClient(QObject):
         await pc.setLocalDescription(await pc.createOffer())
         logger.debug(f"Local Description: {pc.localDescription.sdp}")
         return {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}
+    
+    async def run_answer(self, pc, offer):
+        await pc.setRemoteDescription(RTCSessionDescription(sdp=offer["sdp"], type=offer["type"]))
+        print(f"Remote Description set with SDP: {offer['sdp']}")
+        await pc.setLocalDescription(await pc.createAnswer())
+        print(f"Local Description (Answer): {pc.localDescription.sdp}")
+        return {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}
+
 
     async def consume_signaling(self, pc, websocket):
         async for message in websocket:
-            logger.info(f"Received message: {message}")
+            print(f"Received message: {message}")
             msg = json.loads(message)
-            if msg["type"] == "answer":
-                logger.debug(f"Answer SDP: {msg['answer']['sdp']}")
+            if msg["type"] == "offer":
+                answer = await self.run_answer(pc, msg["offer"])
+                await websocket.send(json.dumps({"type": "answer", "answer": answer}))
+                print("Sent answer")
+            elif msg["type"] == "answer":
                 await pc.setRemoteDescription(RTCSessionDescription(sdp=msg["answer"]["sdp"], type=msg["answer"]["type"]))
-            else:
-                logger.warning(f"Unexpected message type: {msg['type']}")
+                print("Set remote description")
+            elif msg["type"] == "stop":
+                print("Received stop signal")
+                await pc.close()
+                await websocket.close()
+                print("Closed WebRTC and WebSocket connections")
+                await self.webrtc_client.main_webrtc(self.running_event)
+                # video_track.cap.release()
+                
+                # print("Resources released and connections closed")
 
+                # # Ensure Pygame window is closed
+                # stop_event.set()
+                # if display_thread:
+                #     await display_thread  # Wait for the display thread to exit
+                # stop_event.clear()
+                break
+            
     async def main_webrtc(self, running_event):
-        recorder = MediaRecorder("received_video_client1.mp4")
+        # while True:
+            recorder = MediaRecorder("received_video_client1.mp4")
+        
+            self.pc = RTCPeerConnection()
+            self.video_track = VideoTransformTrack()
+            self.pc.addTrack(self.video_track)
 
-        self.pc = RTCPeerConnection()
-        self.video_track = VideoTransformTrack()
-        self.pc.addTrack(self.video_track)
+            @self.pc.on("track")
+            def on_track(track):
+                logger.info("Receiving video track")
+                if track.kind == "video":
+                    recorder.addTrack(track)
 
-        @self.pc.on("track")
-        def on_track(track):
-            logger.info("Receiving video track")
-            if track.kind == "video":
-                recorder.addTrack(track)
+                    async def display_incoming_video():
+                        while running_event.is_set():
+                            frame = await track.recv()
+                            img = frame.to_ndarray(format="bgr24")
+                            self.incoming_frame.emit(img)
 
-                async def display_incoming_video():
+                    asyncio.ensure_future(display_incoming_video())
+                    logger.debug("Added video track to recorder and displaying incoming video")
+            
+            @self.pc.on("connectionstatechange")
+            async def on_connectionstatechange():
+                print(f"Connection state changed to: {self.pc.connectionState}")
+                if self.pc.connectionState == "failed":
+                    await self.pc.close()
+
+            display_thread = None
+        
+            try:
+                logger.info(f"Attempting to connect to wss://s.intellirecruit.ai/websocket")
+                async with websockets.connect("wss://s.intellirecruit.ai/websocket") as websocket:
+                    logger.info("Connected to WebSocket server")
+
+                    await websocket.send(json.dumps({"type": "join", "client_id": CLIENT_ID}))
+                    logger.info(f"Sent join message for {CLIENT_ID}")
+                    
+                    if CLIENT_ID == "client1":
+                        offer = await self.run_offer(self.pc)
+                        await websocket.send(json.dumps({"type": "offer", "offer": offer}))
+                        logger.info("Sent offer")
+
+                    signaling_task = asyncio.create_task(self.consume_signaling(self.pc, websocket))
+                    await recorder.start()
+                    print("Recorder started")
+
+                    
+                    # display_thread = asyncio.to_thread(display_video_pygame)
+                
+                    # Wait for the signaling task and display thread to complete
+                    await asyncio.gather(signaling_task)
+
                     while running_event.is_set():
-                        frame = await track.recv()
-                        img = frame.to_ndarray(format="bgr24")
-                        self.incoming_frame.emit(img)
+                        await asyncio.sleep(1)
 
-                asyncio.ensure_future(display_incoming_video())
-                logger.debug("Added video track to recorder and displaying incoming video")
-
-        try:
-            logger.info(f"Attempting to connect to wss://s.intellirecruit.ai/websocket")
-            async with websockets.connect("wss://s.intellirecruit.ai/websocket") as websocket:
-                logger.info("Connected to WebSocket server")
-
-                await websocket.send(json.dumps({"type": "join", "client_id": CLIENT_ID}))
-                logger.info(f"Sent join message for {CLIENT_ID}")
-
-                offer = await self.run_offer(self.pc)
-                await websocket.send(json.dumps({"type": "offer", "offer": offer}))
-                logger.info("Sent offer")
-
-                await self.consume_signaling(self.pc, websocket)
-
-                await recorder.start()
-                logger.info("Recorder started")
-
-                while running_event.is_set():
-                    await asyncio.sleep(1)
-
-        except websockets.exceptions.ConnectionClosed as e:
-            logger.error(f"WebSocket connection closed unexpectedly: {e}")
-        except Exception as e:
-            logger.error(f"An error occurred: {e}")
-        finally:
-            logger.info("Cleaning up...")
-            await recorder.stop()
-            await self.pc.close()
+            except websockets.exceptions.ConnectionClosed as e:
+                logger.error(f"WebSocket connection closed unexpectedly: {e}")
+            except Exception as e:
+                logger.error(f"An error occurred: {e}")
+            finally:
+                logger.info("Cleaning up...")
+                await recorder.stop()
+                await self.pc.close()
 
 class WebRTCWorker(QRunnable):
     def __init__(self, webrtc_client, running_event):
@@ -330,7 +383,14 @@ class WebRTCWorker(QRunnable):
 
     def run(self):
         try:
-            asyncio.run(self.webrtc_client.main_webrtc(self.running_event))
+            async def ml():
+                while True:
+                    await self.webrtc_client.main_webrtc(self.running_event)
+            # asyncio.run(self.webrtc_client.main_webrtc(self.running_event))
+            #         await self.webrtc_client.main_webrtc_(self.running_event)
+            if __name__ == "__main__":
+                asyncio.run(ml())
+                # asyncio.run(self.webrtc_client.main_webrtc(self.running_event))
         except Exception as e:
             error_msg = f"An error occurred in the WebRTC thread: {e}\n{traceback.format_exc()}"
             logger.error(error_msg)
@@ -432,7 +492,7 @@ class FullScreenWindow(QMainWindow):
 
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_outgoing_frame)
-        self.timer.start(30)  # Update the frame every 30 ms
+        self.timer.start(60)  # Update the frame every 30 ms
 
         self.webrtc_client = WebRTCClient()
         self.webrtc_client.incoming_frame.connect(self.update_incoming_frame)

@@ -11,7 +11,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-SERVER_URL = "wss://dashboard.intellirecruit.ai/websocket"
+SERVER_URL = "wss://s.intellirecruit.ai/websocket"
 CLIENT_ID = "client1"
 
 class VideoTransformTrack(VideoStreamTrack):
