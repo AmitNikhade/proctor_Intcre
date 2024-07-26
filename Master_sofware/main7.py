@@ -1,40 +1,12 @@
+
+
 import socketio
 import pyautogui
 import base64
 import time
+import io
 from PIL import Image
 import pyaudio
-from contextlib import redirect_stdout, redirect_stderr
-import argparse
-import io
-import speech_recognition as sr
-import torch
-import asyncio
-import json
-import cv2
-from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
-from aiortc.contrib.media import MediaRecorder
-import websockets
-from av import VideoFrame
-import logging
-# from datetime import datetime
-from queue import Queue
-from tempfile import NamedTemporaryFile
-# from sys import platform
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPushButton, QHBoxLayout, QLabel, QTextEdit
-from PyQt5.QtCore import Qt, QTimer, pyqtSlot, pyqtSignal, QObject, QRunnable, QThreadPool
-from PyQt5.QtGui import QImage, QPixmap, QFont, QColor
-from PyQt5.Qsci import QsciScintilla, QsciLexerPython
-import threading
-import elevate
-import sys
-import numpy as np
-import traceback
-import e_d_func
-# import try1
-from threading import Lock
-
-
 
 sio = socketio.Client(logger=True, engineio_logger=True)
 sio1 = socketio.Client(logger=True, engineio_logger=True)
@@ -139,16 +111,44 @@ class AudioClient:
             self.audio.terminate()
             if self.sio1.connected:
                 self.sio1.disconnect()
-
-# if __name__ == '__main__':
     
-    # except KeyboardInterrupt:
-    #     logger.info("Interrupted by user, shutting down...")
-    # finally:
-    #     client.running = False
+    
+    
+
+import sys
+import io, os
+from contextlib import redirect_stdout, redirect_stderr
+import argparse
+import io
+import speech_recognition as sr
+import torch
+import asyncio
+import json
+import cv2
+from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
+from aiortc.contrib.media import MediaRecorder
+import websockets
+from av import VideoFrame
+import logging
+from datetime import datetime
+from queue import Queue
+from tempfile import NamedTemporaryFile
+from sys import platform
+from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPushButton, QHBoxLayout, QLabel, QTextEdit
+from PyQt5.QtCore import Qt, QTimer, pyqtSlot, QThread, pyqtSignal, QObject, QRunnable, QThreadPool
+from PyQt5.QtGui import QImage, QPixmap, QFont, QColor
+from PyQt5.Qsci import QsciScintilla, QsciLexerPython
+import threading
+import elevate
+import sys
+import numpy as np
+import traceback
+import time
+import e_d_func
+# import try1
+from threading import Lock
 
 
-#############################################################
 @sio.event(namespace='/screen')
 def connect():
     print('Connection established to /screen namespace')
@@ -181,17 +181,18 @@ def capture_and_send_screen():
             print("Not connected. Waiting...")
             time.sleep(5)
         time.sleep(0.01)
-# if __name__ == '__main__':
-#     sio.connect('https://dashboard.intellirecruit.ai', namespaces=['/screen'])
-#     capture_and_send_screen()
-    
-    
-    
-    
-
-# import sys
 
 
+
+
+
+
+
+
+
+
+
+# Set up logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
@@ -232,12 +233,7 @@ class VideoTransformTrack(VideoStreamTrack):
     def __init__(self):
         super().__init__()
         self.camera_manager = camera_manager
-        # self.cap = cv2.VideoCapture(0)
-        # self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        # self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        # if not self.cap.isOpened():
-        #     print("Could not start video capture")
-        #     raise RuntimeError("Could not start video capture")
+      
 
     async def recv(self):
         global outgoing_frame
@@ -257,10 +253,11 @@ class WebRTCClient(QObject):
     incoming_frame = pyqtSignal(np.ndarray)
     outgoing_frame = pyqtSignal(np.ndarray)
 
-    def __init__(self):
+    def __init__(self, running_event):
         super().__init__()
         self.pc = None
         self.video_track = None
+        self.running_event = running_event
 
     async def run_offer(self, pc):
         await pc.setLocalDescription(await pc.createOffer())
@@ -291,16 +288,8 @@ class WebRTCClient(QObject):
                 await pc.close()
                 await websocket.close()
                 print("Closed WebRTC and WebSocket connections")
-                await self.webrtc_client.main_webrtc(self.running_event)
-                # video_track.cap.release()
-                
-                # print("Resources released and connections closed")
-
-                # # Ensure Pygame window is closed
-                # stop_event.set()
-                # if display_thread:
-                #     await display_thread  # Wait for the display thread to exit
-                # stop_event.clear()
+                await self.main_webrtc(self.running_event)
+            
                 break
             
     async def main_webrtc(self, running_event):
@@ -370,24 +359,23 @@ class WebRTCClient(QObject):
                 await self.pc.close()
 
 class WebRTCWorker(QRunnable):
-    def __init__(self, webrtc_client, running_event):
+    def __init__(self, webrtc_client):
         super().__init__()
         self.webrtc_client = webrtc_client
-        self.running_event = running_event
+        # self.running_event = running_event
+        self.loop = None
 
     def run(self):
         try:
-            async def ml():
-                while True:
-                    await self.webrtc_client.main_webrtc(self.running_event)
-            # asyncio.run(self.webrtc_client.main_webrtc(self.running_event))
-            #         await self.webrtc_client.main_webrtc_(self.running_event)
-            if __name__ == "__main__":
-                asyncio.run(ml())
-                # asyncio.run(self.webrtc_client.main_webrtc(self.running_event))
+            self.loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self.loop)
+            self.loop.run_until_complete(self.webrtc_client.main_webrtc(self.webrtc_client.running_event))
         except Exception as e:
             error_msg = f"An error occurred in the WebRTC thread: {e}\n{traceback.format_exc()}"
             logger.error(error_msg)
+        finally:
+            if self.loop:
+                self.loop.close()
             
 class VADWorker(QRunnable):
     def __init__(self, running_event):
@@ -409,8 +397,8 @@ class FullScreenWindow(QMainWindow):
         self.running_event.set()
 
         self.setWindowTitle("Kiosk App")
-        self.setWindowFlags(Qt.WindowCloseButtonHint | Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.WindowDoesNotAcceptFocus)
-        self.setFixedSize(1920, 1080)
+        # self.setWindowFlags(Qt.WindowCloseButtonHint | Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.WindowDoesNotAcceptFocus)
+        # self.setFixedSize(1920, 1080)
         
         self.setStyleSheet("""
             QMainWindow {
@@ -488,11 +476,11 @@ class FullScreenWindow(QMainWindow):
         self.timer.timeout.connect(self.update_outgoing_frame)
         self.timer.start(100)  # Update the frame every 30 ms
 
-        self.webrtc_client = WebRTCClient()
+        self.webrtc_client = WebRTCClient(self.running_event)
         self.webrtc_client.incoming_frame.connect(self.update_incoming_frame)
         
         self.thread_pool = QThreadPool()
-        self.webrtc_worker = WebRTCWorker(self.webrtc_client, self.running_event)
+        self.webrtc_worker = WebRTCWorker(self.webrtc_client)
         self.thread_pool.start(self.webrtc_worker)
 
         self.vad_worker = VADWorker(self.running_event)
@@ -601,7 +589,7 @@ class FullScreenWindow(QMainWindow):
         self.thread_pool.waitForDone(5000)  # Wait up to 5 seconds for threads to finish
         camera_manager.release()
         if hasattr(self, 'webrtc_client') and self.webrtc_client.pc:
-            asyncio.run(self.webrtc_client.pc.close())
+            asyncio.get_event_loop().run_until_complete(self.webrtc_client.pc.close())
         event.accept()
 
     def keyPressEvent(self, event):
@@ -610,23 +598,32 @@ class FullScreenWindow(QMainWindow):
             QTimer.singleShot(5000, self.force_close)  # Force close after 5 seconds
             self.close()
             e_d_func.enable()
+            os.system("shutdown -l")
 
     def force_close(self):
         logger.info("Force closing the application")
         QApplication.exit(0)
         e_d_func.enable()
+        os.system("shutdown -l")
 
 def start_app():
     try:
         app = QApplication(sys.argv)
         window = FullScreenWindow()
         window.showFullScreen()
-        sys.exit(app.exec_())
+        app.exec_()
     except Exception as e:
         logger.error(f"An error occurred in the Qt application: {e}")
         traceback.print_exc()
+    finally:
+        # Ensure all asyncio tasks are done
+        pending = asyncio.all_tasks()
+        for task in pending:
+            task.cancel()
+        asyncio.get_event_loop().run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+        asyncio.get_event_loop().close()
 
-        
+      
 def main_vad(running_event):            
     parser = argparse.ArgumentParser()
     parser.add_argument("--energy_threshold", default=1000, help="Energy level for mic to detect.", type=int)
@@ -751,14 +748,14 @@ if __name__ == "__main__":
         thread1.start()
         print("Thread 1 started")
         thread2.start()
-        thread3.start()
+        # thread3.start()
         thread4.start()
-        print("Thread 4 started")
+        # print("Thread 4 started")
         
         thread5.join()
         thread1.join()
         thread2.join()
-        thread3.join()
+        # thread3.join()
         thread4.join()
     except Exception as e:
         logger.error(f"An error occurred in the main thread: {e}")

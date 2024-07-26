@@ -1,40 +1,12 @@
+
+
 import socketio
 import pyautogui
 import base64
 import time
+import io
 from PIL import Image
 import pyaudio
-from contextlib import redirect_stdout, redirect_stderr
-import argparse
-import io
-import speech_recognition as sr
-import torch
-import asyncio
-import json
-import cv2
-from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
-from aiortc.contrib.media import MediaRecorder
-import websockets
-from av import VideoFrame
-import logging
-# from datetime import datetime
-from queue import Queue
-from tempfile import NamedTemporaryFile
-# from sys import platform
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPushButton, QHBoxLayout, QLabel, QTextEdit
-from PyQt5.QtCore import Qt, QTimer, pyqtSlot, pyqtSignal, QObject, QRunnable, QThreadPool
-from PyQt5.QtGui import QImage, QPixmap, QFont, QColor
-from PyQt5.Qsci import QsciScintilla, QsciLexerPython
-import threading
-import elevate
-import sys
-import numpy as np
-import traceback
-import e_d_func
-# import try1
-from threading import Lock
-
-
 
 sio = socketio.Client(logger=True, engineio_logger=True)
 sio1 = socketio.Client(logger=True, engineio_logger=True)
@@ -189,9 +161,39 @@ def capture_and_send_screen():
     
     
 
-# import sys
-
-
+import sys
+import io, os
+from contextlib import redirect_stdout, redirect_stderr
+import argparse
+import io
+import speech_recognition as sr
+import torch
+import asyncio
+import json
+import cv2
+from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
+from aiortc.contrib.media import MediaRecorder
+import websockets
+from av import VideoFrame
+import logging
+from datetime import datetime
+from queue import Queue
+from tempfile import NamedTemporaryFile
+from sys import platform
+from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QPushButton, QHBoxLayout, QLabel, QTextEdit
+from PyQt5.QtCore import Qt, QTimer, pyqtSlot, QThread, pyqtSignal, QObject, QRunnable, QThreadPool
+from PyQt5.QtGui import QImage, QPixmap, QFont, QColor
+from PyQt5.Qsci import QsciScintilla, QsciLexerPython
+import threading
+import elevate
+import sys
+import numpy as np
+import traceback
+import time
+import e_d_func
+import try1
+from threading import Lock
+# Set up logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
@@ -627,11 +629,11 @@ def start_app():
         traceback.print_exc()
 
         
-def main_vad(running_event):            
+def main_vad(running_event):
     parser = argparse.ArgumentParser()
     parser.add_argument("--energy_threshold", default=1000, help="Energy level for mic to detect.", type=int)
     parser.add_argument("--record_timeout", default=2, help="How real time the recording is in seconds.", type=float)
-    if 'linux' in sys.platform:
+    if 'linux' in platform:
         parser.add_argument("--default_microphone", default='pulse',
                             help="Default microphone name for SpeechRecognition. Run this with 'list' to view available Microphones.", type=str)
     args = parser.parse_args()
@@ -648,7 +650,7 @@ def main_vad(running_event):
     
     # Important for linux users. 
     # Prevents permanent application hang and crash by using the wrong Microphone
-    if 'linux' in sys.platform:
+    if 'linux' in platform:
         mic_name = args.default_microphone
         if not mic_name or mic_name == 'list':
             print("Available microphone devices are: ")
@@ -739,7 +741,7 @@ if __name__ == "__main__":
         
         client = AudioClient()
     # try:
-        running_event = threading.Event()
+       
         thread5 = threading.Thread(target=client.run, name='Thread 5')
         thread4 = threading.Thread(target=capture_and_send_screen, name='Thread 4')
         
