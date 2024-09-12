@@ -196,7 +196,7 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 SERVER_URL = "wss://dashboard.intellirecruit.ai/websocket"
-CLIENT_ID = "client1"
+CLIENT_ID = "client2"
 
 frame_lock = Lock()
 

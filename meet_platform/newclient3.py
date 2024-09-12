@@ -1,3 +1,5 @@
+
+
 import asyncio
 import json
 import cv2
@@ -132,8 +134,40 @@ async def start_client():
     global display_thread 
     global video_track
     recorder = MediaRecorder(f"received_video_{CLIENT_ID}.mp4")
+    from aiortc import RTCIceServer, RTCConfiguration
+    
+    
+    
+    
+    from aiortc import RTCIceServer, RTCConfiguration
 
-    pc = RTCPeerConnection()
+# Replace with your STUN/TURN server credentials
+
+#  [{'url': 'stun:global.stun.twilio.com:3478', 'urls': 'stun:global.stun.twilio.com:3478'}, {'url': 'turn:global.turn.twilio.com:3478?transport=udp', 'username': '78e87c2da25896f0cdf3b49542a0176afe9e9017d82a619907a2eaff9c0ed84e', 'urls': 'turn:global.turn.twilio.com:3478?transport=udp', 'credential': 'LfHgqhGrjZII2h3wBk4iSs/r3wl3AFe3SclZ8v4bfds='}, {'url': 'turn:global.turn.twilio.com:3478?transport=tcp', 'username': '78e87c2da25896f0cdf3b49542a0176afe9e9017d82a619907a2eaff9c0ed84e', 'urls': 'turn:global.turn.twilio.com:3478?transport=tcp', 'credential': 'LfHgqhGrjZII2h3wBk4iSs/r3wl3AFe3SclZ8v4bfds='}, {'url': 'turn:global.turn.twilio.com:443?transport=tcp', 'username': '78e87c2da25896f0cdf3b49542a0176afe9e9017d82a619907a2eaff9c0ed84e', 'urls': 'turn:global.turn.twilio.com:443?transport=tcp', 'credential': 'LfHgqhGrjZII2h3wBk4iSs/r3wl3AFe3SclZ8v4bfds='}]
+    ice_servers = [
+    RTCIceServer(urls='stun:global.stun.twilio.com:3478'),  # Public STUN server
+    RTCIceServer(urls='turn:global.turn.twilio.com:3478?transport=udp', 
+                 credential='LfHgqhGrjZII2h3wBk4iSs/r3wl3AFe3SclZ8v4bfds=', 
+                 username='78e87c2da25896f0cdf3b49542a0176afe9e9017d82a619907a2eaff9c0ed84e'),  # TURN server with UDP transport
+    RTCIceServer(urls='turn:global.turn.twilio.com:3478?transport=tcp', 
+                 credential='LfHgqhGrjZII2h3wBk4iSs/r3wl3AFe3SclZ8v4bfds=', 
+                 username='78e87c2da25896f0cdf3b49542a0176afe9e9017d82a619907a2eaff9c0ed84e'),  # TURN server with TCP transport
+    RTCIceServer(urls='turn:global.turn.twilio.com:443?transport=tcp', 
+                 credential='LfHgqhGrjZII2h3wBk4iSs/r3wl3AFe3SclZ8v4bfds=', 
+                 username='78e87c2da25896f0cdf3b49542a0176afe9e9017d82a619907a2eaff9c0ed84e'),  # TURN server with TCP transport on port 443
+]
+
+
+    configuration = RTCConfiguration(iceServers=ice_servers)
+
+    # Then use this configuration when creating the RTCPeerConnection
+    pc = RTCPeerConnection(configuration=configuration)
+   
+
+    # rtc_configuration = RTCConfiguration(iceServers=ice_servers)
+
+    # Use rtc_configuration when creating the RTCPeerConnection
+    # pc = RTCPeerConnection(rtc_configuration)
     video_track = VideoTransformTrack()
     pc.addTrack(video_track)
 
@@ -170,6 +204,10 @@ async def start_client():
             
             # Wait for the signaling task and display thread to complete
             await asyncio.gather(signaling_task, display_thread)
+            # if asyncio.gather(signaling_task, display_thread) is True:
+            #     print("All tasks completed successfully")
+            # else:
+            #     remove_clients()
 
     except websockets.exceptions.ConnectionClosed as e:
         print(f"WebSocket connection closed unexpectedly: {e}")
@@ -188,4 +226,7 @@ async def main_loop():
         await start_client()
 
 if __name__ == "__main__":
-    asyncio.run(main_loop())
+    try:
+        asyncio.run(main_loop())
+    except Exception as e:
+        print(f"Failed to start client: {e}")

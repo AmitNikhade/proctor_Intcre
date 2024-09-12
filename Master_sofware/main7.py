@@ -13,6 +13,8 @@ sio1 = socketio.Client(logger=True, engineio_logger=True)
 
 
 
+    
+
 class AudioClient:
     def __init__(self, server_url='https://dash.intellirecruit.ai'):
         self.sio1 = socketio.Client(logger=True, engineio_logger=True)
@@ -111,7 +113,7 @@ class AudioClient:
             self.audio.terminate()
             if self.sio1.connected:
                 self.sio1.disconnect()
-    
+
     
     
 
@@ -149,6 +151,8 @@ import e_d_func
 from threading import Lock
 
 
+
+
 @sio.event(namespace='/screen')
 def connect():
     print('Connection established to /screen namespace')
@@ -181,17 +185,8 @@ def capture_and_send_screen():
             print("Not connected. Waiting...")
             time.sleep(5)
         time.sleep(0.01)
-
-
-
-
-
-
-
-
-
-
-
+        
+        
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -598,13 +593,11 @@ class FullScreenWindow(QMainWindow):
             QTimer.singleShot(5000, self.force_close)  # Force close after 5 seconds
             self.close()
             e_d_func.enable()
-            os.system("shutdown -l")
 
     def force_close(self):
         logger.info("Force closing the application")
         QApplication.exit(0)
         e_d_func.enable()
-        os.system("shutdown -l")
 
 def start_app():
     try:
@@ -623,7 +616,11 @@ def start_app():
         asyncio.get_event_loop().run_until_complete(asyncio.gather(*pending, return_exceptions=True))
         asyncio.get_event_loop().close()
 
-      
+  
+  
+  
+  
+    
 def main_vad(running_event):            
     parser = argparse.ArgumentParser()
     parser.add_argument("--energy_threshold", default=1000, help="Energy level for mic to detect.", type=int)
@@ -733,30 +730,23 @@ def main_vad(running_event):
 if __name__ == "__main__":
     try:
         elevate.elevate()
-        
-        client = AudioClient()
+        # start_app()
+  
     # try:
-        running_event = threading.Event()
-        thread5 = threading.Thread(target=client.run, name='Thread 5')
-        thread4 = threading.Thread(target=capture_and_send_screen, name='Thread 4')
-        
+       
+       
         thread1 = threading.Thread(target=start_app, name='Thread 1')
-        thread2 = threading.Thread(target=main_vad, name='Thread 2')
-        thread3 = threading.Thread(target=e_d_func.disable, name='Thread 3')
+ 
         
-        thread5.start()
+        # # thread5.start()
         thread1.start()
-        print("Thread 1 started")
-        thread2.start()
-        # thread3.start()
-        thread4.start()
-        # print("Thread 4 started")
+      
         
-        thread5.join()
+        # # thread5.join()
         thread1.join()
-        thread2.join()
+        # thread2.join()
         # thread3.join()
-        thread4.join()
+        # thread4.join()
     except Exception as e:
         logger.error(f"An error occurred in the main thread: {e}")
         traceback.print_exc()
