@@ -1,0 +1,11 @@
+opencv-python==4.10.0.84
+numpy==1.26.4
+dlib==19.24.4
+mediapipe==0.10.14
+pymongo==4.7.2
+tensorflow==2.17.0
+# tensorflow-cpu
+keras==3.5.0
+# keras
+gunicorn==20.1.0
+flask
